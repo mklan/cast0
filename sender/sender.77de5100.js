@@ -208,6 +208,10 @@ function onError(message) {
 function onConnectCast(evt) {
   log('onConnectCast / session id: ' + evt.sessionId);
   session = evt;
+  session.sendMessage('urn:x-cast:cast0', {
+    type: "message",
+    text: 'VACETA'
+  });
 }
 
 function connectCast() {

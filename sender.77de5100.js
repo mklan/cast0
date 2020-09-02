@@ -118,84 +118,143 @@ parcelRequire = (function (modules, cache, entry, globalName) {
 
   return newRequire;
 })({"index.ts":[function(require,module,exports) {
-var castReceiverManager = null;
-var messageBus = null; // @ts-ignore
+// const initializeCastApi = function() {
+//   console.log('initializeCastApi')
+//   // @ts-ignore
+//   cast.framework.CastContext.getInstance().setOptions({
+//     receiverApplicationId: '6ABD8107',
+//     // @ts-ignore
+//     autoJoinPolicy: chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED
+//   });
+// };
+var apps = {
+  cast0: {
+    id: '6ABD8107'
+  },
+  test: {
+    id: '02A556F6'
+  }
+};
+document.getElementById('connect_cast').addEventListener('click', connectCast);
+document.getElementById('disconnect_cast').addEventListener('click', disconnectCast);
+var session = null;
 
-var cast;
-
-function initializeCast(googleCastonf) {
-  cast = googleCastonf.cast;
-  cast.receiver.logger.setLevelValue(cast.receiver.LoggerLevel.DEBUG);
-  castReceiverManager = cast.receiver.CastReceiverManager.getInstance();
-
-  castReceiverManager.onReady = function (evt) {
-    log2('onReady / data: ' + JSON.stringify(evt.data));
-    castReceiverManager.setApplicationState('application status: onready');
+var sessionListener = function sessionListener(namespace) {
+  return function (evt) {
+    log('sessionListener / session id: ' + evt.sessionId);
+    session = evt;
+    session.addUpdateListener(sessionUpdateListener);
+    session.addMessageListener(namespace, receiverMessage);
   };
+};
 
-  castReceiverManager.onSenderConnected = function (evt) {
-    log2('onSenderConnected / data: ' + JSON.stringify(evt.data) + ' / userAgent: ' + castReceiverManager.getSender(evt.data).userAgent);
-  };
+function sessionUpdateListener(isAlive) {
+  log('sessionUpdateListener / isAlive: ' + isAlive + ' / session id: ' + session.sessionId);
 
-  castReceiverManager.onSenderDisconnected = function (evt) {
-    log2('onSenderDisconnected / data: ' + JSON.stringify(evt.data));
-
-    if (castReceiverManager.getSenders().length == 0) {
-      log2('close ');
-      close();
-    }
-  };
-
-  castReceiverManager.onSystemVolumeChanged = function (evt) {
-    log2('onSystemVolumeChanged / data: ' + JSON.stringify(evt.data));
-  };
-
-  messageBus = castReceiverManager.getCastMessageBus(googleCastonf.namespace);
-
-  messageBus.onMessage = function (evt) {
-    log2('onMessage / from: ' + evt.senderId + ' / data: ' + JSON.stringify(evt.data));
-    receiveMessage(evt.senderId, evt.data);
-    sendMessage(evt.senderId, evt.data);
-  };
-
-  log2('receiver manager started.');
-  castReceiverManager.start({
-    statusText: 'application status: starting'
-  });
+  if (!isAlive) {
+    session = null;
+  }
 }
 
-function receiveMessage(id, data) {}
-
-function sendMessage(id, data) {
-  messageBus.send(id, data);
+function receiverMessage(namespace, message) {
+  log('receiverMessage / namespace: ' + namespace + ' / message:' + message);
 }
 
-function log2(obj) {
-  var elem = document.createElement('div');
-  elem.textContent = JSON.stringify(obj);
-  document.getElementById('display').appendChild(elem);
-}
-
-function initialize(cast) {
-  console.log('cast', cast);
-  initializeCast({
-    cast: cast,
-    namespace: 'urn:x-cast:cast0'
-  });
-}
-
-globalListener('cast', initialize);
-
-function globalListener(varName, cb) {
+function initializeCastApi(appId, namespace) {
+  log('initializeCastApi'); // @ts-ignore
+  // cast.framework.CastContext.getInstance().setOptions({
+  //   receiverApplicationId: appId,
+  //     // @ts-ignore
+  //   autoJoinPolicy: chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED
+  // });
   // @ts-ignore
-  setTimeout(function () {
-    if (window[varName]) {
-      return cb(window[varName]);
-    }
 
-    return globalListener(varName, cb);
-  }, 500);
+  var sessionRequest = new chrome.cast.SessionRequest(appId); // @ts-ignore
+
+  var apiConfig = new chrome.cast.ApiConfig(sessionRequest, sessionListener(namespace), receiverListener); // @ts-ignore
+
+  chrome.cast.initialize(apiConfig, onInitSuccess, onError);
 }
+
+function receiverListener(evt) {
+  log('receiverListener / receiver status: ' + (evt === 'available' ? 'found' : 'list empty'));
+}
+
+function disconnectCast() {
+  log('disconnect cast');
+
+  if (session === null) {
+    log('session is null.');
+    return;
+  }
+
+  log('session is not null.');
+  session.stop(onStopAppSuccess, onError);
+}
+
+function onStopAppSuccess() {
+  log('onStopAppSuccess');
+  session = null;
+}
+
+function onInitSuccess() {
+  log('onInitSuccess');
+}
+
+function onError(message) {
+  log('onError / message: ' + JSON.stringify(message));
+}
+
+function onConnectCast(evt) {
+  log('onConnectCast / session id: ' + evt.sessionId);
+  session = evt;
+  session.sendMessage('urn:x-cast:cast0', {
+    type: "message",
+    text: 'VACETA'
+  });
+}
+
+function connectCast() {
+  log('connect cast');
+
+  if (session !== null) {
+    log('session is not null.');
+    return;
+  }
+
+  log('session is null.'); // @ts-ignore
+
+  chrome.cast.requestSession(onConnectCast, onError);
+}
+
+window['__onGCastApiAvailable'] = function (isAvailable) {
+  console.log('cast api available:', isAvailable);
+
+  if (isAvailable) {
+    initializeCastApi(apps.cast0.id, 'urn:x-cast:cast0');
+  }
+};
+
+var log = function log() {
+  var l = [];
+
+  for (var _i = 0; _i < arguments.length; _i++) {
+    l[_i] = arguments[_i];
+  }
+
+  return console.log.apply(console, l);
+}; // @ts-ignore
+
+
+var debug = function debug() {
+  var l = [];
+
+  for (var _i = 0; _i < arguments.length; _i++) {
+    l[_i] = arguments[_i];
+  }
+
+  return window.debug && log.apply(void 0, l);
+};
 },{}],"../../node_modules/parcel-bundler/src/builtins/hmr-runtime.js":[function(require,module,exports) {
 var global = arguments[3];
 var OVERLAY_ID = '__parcel__error__overlay__';
@@ -224,7 +283,7 @@ var parent = module.bundle.parent;
 if ((!parent || !parent.isParcelRequire) && typeof WebSocket !== 'undefined') {
   var hostname = "" || location.hostname;
   var protocol = location.protocol === 'https:' ? 'wss' : 'ws';
-  var ws = new WebSocket(protocol + '://' + hostname + ':' + "36261" + '/');
+  var ws = new WebSocket(protocol + '://' + hostname + ':' + "39607" + '/');
 
   ws.onmessage = function (event) {
     checkedAssets = {};
@@ -401,4 +460,4 @@ function hmrAcceptRun(bundle, id) {
   }
 }
 },{}]},{},["../../node_modules/parcel-bundler/src/builtins/hmr-runtime.js","index.ts"], null)
-//# sourceMappingURL=/receiver.77de5100.js.map
+//# sourceMappingURL=/sender.77de5100.js.map
